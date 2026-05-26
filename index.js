@@ -13,10 +13,6 @@ const CONFIG_PATH = path.join(__dirname, "bot-config.js");
 const QOTD_PATH = path.join(__dirname, "qotd.js");
 const STATE_FILE = path.join(__dirname, "bot-state.json");
 
-const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const today = new Date();
-const dayName = days[today.getDay()];
-
 const token = process.env.DISCORD_TOKEN || process.env.TOKEN || process.env.TOKEN2;
 
 if (!token) {
@@ -38,14 +34,13 @@ const DEFAULT_CONFIG = {
         catchUpWindowMinutes: 10
     },
     dailyMessages: {
-    morning: `Good morning everyone! This is a scheduled daily message!
+        morning: `Good morning everyone! This is a scheduled daily message!
 If you would not like to receive these messages, mute this channel.
-Today is ${dayName}. Have a wonderful day!`,
+Today is {dayName}. Have a wonderful day!`,
 
-    evening: `Good evening everyone! Hope everyone is having a good day and will continue to have a good day!
+        evening: `Good evening everyone! Hope everyone is having a good day and will continue to have a good day!
 This is a scheduled daily message! If you would not like to receive these messages, mute this channel.
-In case you missed it this morning, today is ${dayName}. Continue to enjoy your day!`
-}
+In case you missed it this morning, today is {dayName}. Continue to enjoy your day!`
     },
     moderation: {
         enabled: true,
@@ -83,9 +78,11 @@ const client = new Client({
 });
 
 let config = loadConfig();
-let qotdBank = loadQotdBank();
+let qotdBank = [];
 let state = createDefaultState();
 let moderationCache = buildModerationCache(config.moderation.blockedWords);
+
+qotdBank = loadQotdBank();
 
 function createDefaultState() {
     return {
@@ -101,14 +98,24 @@ function createDefaultState() {
     };
 }
 
+function asPlainObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function asArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+
 function mergeConfig(base, overrides) {
+    const safeOverrides = asPlainObject(overrides);
+
     return {
         ...base,
-        ...overrides,
-        channels: { ...base.channels, ...(overrides.channels || {}) },
-        schedule: { ...base.schedule, ...(overrides.schedule || {}) },
-        dailyMessages: { ...base.dailyMessages, ...(overrides.dailyMessages || {}) },
-        moderation: { ...base.moderation, ...(overrides.moderation || {}) }
+        ...safeOverrides,
+        channels: { ...base.channels, ...asPlainObject(safeOverrides.channels) },
+        schedule: { ...base.schedule, ...asPlainObject(safeOverrides.schedule) },
+        dailyMessages: { ...base.dailyMessages, ...asPlainObject(safeOverrides.dailyMessages) },
+        moderation: { ...base.moderation, ...asPlainObject(safeOverrides.moderation) }
     };
 }
 
@@ -139,31 +146,33 @@ function loadQotdBank() {
             .filter(Boolean);
     } catch (err) {
         console.error(`Could not load qotd.js: ${err.message}`);
-        return qotdBank || [];
+        return qotdBank;
     }
+}
+
+function normalizeState(rawState) {
+    const parsed = asPlainObject(rawState);
+    const moderation = asPlainObject(parsed.moderation);
+    const schedule = asPlainObject(parsed.schedule);
+    const qotd = asPlainObject(parsed.qotd);
+
+    return {
+        moderation: {
+            users: asPlainObject(moderation.users)
+        },
+        schedule: {
+            sent: asPlainObject(schedule.sent)
+        },
+        qotd: {
+            indices: asPlainObject(qotd.indices)
+        }
+    };
 }
 
 async function loadState() {
     try {
         const raw = await fs.readFile(STATE_FILE, "utf8");
-        const parsed = JSON.parse(raw);
-
-        state = {
-            ...createDefaultState(),
-            ...parsed,
-            moderation: {
-                ...createDefaultState().moderation,
-                ...(parsed.moderation || {})
-            },
-            schedule: {
-                ...createDefaultState().schedule,
-                ...(parsed.schedule || {})
-            },
-            qotd: {
-                ...createDefaultState().qotd,
-                ...(parsed.qotd || {})
-            }
-        };
+        state = normalizeState(JSON.parse(raw));
     } catch (err) {
         if (err.code !== "ENOENT") {
             console.error(`Could not load ${STATE_FILE}: ${err.message}`);
@@ -225,6 +234,17 @@ function getLocalDateTimeParts(date = new Date()) {
     };
 }
 
+function getLocalDayName(date = new Date()) {
+    return new Intl.DateTimeFormat("en-US", {
+        timeZone: config.timezone,
+        weekday: "long"
+    }).format(date);
+}
+
+function renderScheduledMessage(messageText) {
+    return String(messageText).replaceAll("{dayName}", getLocalDayName());
+}
+
 function shouldRunScheduledJob(guildId, jobName, clock) {
     const { dateKey, minutes } = getLocalDateTimeParts();
     const scheduledMinute = parseClock(clock);
@@ -260,7 +280,7 @@ async function maybeSendDailyMessage(guild, jobName, channelName, clock, message
         return;
     }
 
-    await sendWithoutMentions(channel, messageText);
+    await sendWithoutMentions(channel, renderScheduledMessage(messageText));
     await markScheduledJobSent(guild.id, jobName);
 }
 
@@ -356,7 +376,7 @@ function buildModerationCache(blockedWords) {
     const exact = new Set();
     const squashed = new Set();
 
-    for (const word of blockedWords || []) {
+    for (const word of asArray(blockedWords)) {
         const folded = foldFilterChunk(String(word));
         if (!folded) continue;
 
@@ -435,13 +455,13 @@ async function handleAutoModeration(message) {
     if (!message.guild || message.author.bot) return false;
     if (!findBlockedContent(message.content)) return false;
 
-    const ignoredChannelIds = config.moderation.ignoredChannelIds || [];
+    const ignoredChannelIds = asArray(config.moderation.ignoredChannelIds);
     if (ignoredChannelIds.includes(message.channel.id)) return false;
 
     const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
     if (!member) return false;
 
-    const ignoredRoleIds = config.moderation.ignoredRoleIds || [];
+    const ignoredRoleIds = asArray(config.moderation.ignoredRoleIds);
     if (member.roles.cache.some(role => ignoredRoleIds.includes(role.id))) return false;
 
     const record = incrementModerationRecord(message.guild.id, message.author.id);
@@ -557,8 +577,14 @@ async function getBotMember(guild) {
     return guild.members.me || guild.members.fetchMe();
 }
 
+async function getCommandMember(message) {
+    return message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+}
+
 async function requireUserPermission(message, permission, label) {
-    if (!message.member.permissions.has(permission)) {
+    const member = await getCommandMember(message);
+
+    if (!member || !member.permissions.has(permission)) {
         await message.reply(`You need the ${label} permission to use this command.`);
         return false;
     }
@@ -890,4 +916,3 @@ main().catch(err => {
     console.error(err);
     process.exit(1);
 });
-
