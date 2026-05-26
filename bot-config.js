@@ -3,9 +3,9 @@ module.exports = {
     timezone: "America/New_York",
 
     channels: {
-        morning: "Morning EST",
-        evening: "Evening EST",
-        qotd: "QOTD"
+        morning: "morning-est",
+        evening: "evening-est",
+        qotd: "qotd"
     },
 
     schedule: {
@@ -32,24 +32,24 @@ module.exports = {
             "bullshit",
             "shitty",
             "fuck",
+            "fucks",
             "fucker",
             "fucking",
             "cunt",
+            "cunts",
             "bitch",
+            "bitchs",
+            "ass",
             "asshole",
             "dickhead",
             "nigger",
             "nigga",
             "faggot",
             "fag",
-            "kike",
-            "chink",
-            "spic",
-            "coon",
-            "wetback",
-            "beaner",
             "tranny",
-            "retard"
+            "retard",
+            "retigga",
+            "retigger"
         ],
 
         ignoredChannelIds: [],
