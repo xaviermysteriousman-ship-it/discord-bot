@@ -21,10 +21,10 @@ client.on("messageCreate", message => {
     if (message.content === "!ping") {
         message.reply("Pong!");
     }
-    if (message.content === "@Glacial Knight#1096 ") {
+    if (message.content === "@Glacial Knight ") {
         message.reply("Hello!");
     }
-    if (message.content === "@Glacial Knight#1096") {
+    if (message.content === "@Glacial Knight") {
         message.reply("Hello!");
     }
 });
