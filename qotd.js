@@ -224,5 +224,3 @@ module.exports = [
     "December 30 - What is something you learned about yourself this year?",
     "December 31 - What is one goal or mindset you want to carry into next year?"
 ];
-```
-
