@@ -39,7 +39,6 @@ module.exports = {
             "cunts",
             "bitch",
             "bitchs",
-            "ass",
             "asshole",
             "dickhead",
             "nigger",
